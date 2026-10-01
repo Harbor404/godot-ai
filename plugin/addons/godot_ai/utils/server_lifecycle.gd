@@ -1097,8 +1097,22 @@ func _effect_prove(payload: Dictionary) -> Dictionary:
 			first_capture = _capture_identity("launch", hinted_pid, stage_attempts)
 			first_snapshot = first_capture.get("snapshot")
 			if PortResolver.process_descends_from(hinted_pid, launch_pid, first_snapshot):
-				launch_capture = first_capture
-				launch_snapshot = first_snapshot
+					var first_diagnostic: Dictionary = first_capture.get("diagnostic", {})
+					var launch_attempt := int(
+						first_diagnostic.get("attempt", stage_attempts.get("launch", 1))
+					)
+					launch_capture = {
+						"snapshot": first_snapshot,
+						"diagnostic": _snapshot_evidence(
+							"launch",
+							launch_pid,
+							first_snapshot,
+							[],
+							launch_attempt,
+							_capture_elapsed_ms(first_capture)
+						),
+					}
+					launch_snapshot = first_snapshot
 	if launch_snapshot == null:
 		launch_capture = _capture_identity("launch", launch_pid, stage_attempts)
 		launch_snapshot = launch_capture.get("snapshot")

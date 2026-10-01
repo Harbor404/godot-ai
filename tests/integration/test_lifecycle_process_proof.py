@@ -143,6 +143,8 @@ def test_real_lifecycle_proof_revalidates_pid_hints_and_final_identity(tmp_path:
             )
             assert evidence["wrong_launch_identity"]["category"] == "identity_mismatch"
             assert evidence["final_pid_changed"]["category"] == "identity_mismatch"
+            assert launch_evidence["pid"] == os.getpid()
+            assert evidence["wrong_launch_identity"]["pid"] == os.getpid()
             assert evidence["owned_child"]["attempts"] == {
                 "launch": 1, "first_server": 1, "final_server": 1
             }

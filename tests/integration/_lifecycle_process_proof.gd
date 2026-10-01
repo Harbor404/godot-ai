@@ -130,6 +130,7 @@ func run() -> void:
 			"reason": reason,
 			"stage": str(result.get("snapshot_diagnostic", {}).get("stage", "")),
 			"category": str(result.get("snapshot_diagnostic", {}).get("category", "")),
+			"pid": int(result.get("snapshot_diagnostic", {}).get("pid", -1)),
 			"attempts": result.get("proof_stage_attempts", {}),
 		})
 	finish()
