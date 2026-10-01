@@ -652,7 +652,7 @@ func test_snapshot_diagnostics_aggregate_without_changing_refusals() -> void:
 	assert_eq(reasons, ["invalid_pid"])
 	assert_eq(diagnostics[0].count, 20)
 	var Lifecycle := load("res://addons/godot_ai/utils/server_lifecycle.gd")
-	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch_grant/single/collector_null x20.")
+	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch/process_query x20.")
 
 
 func test_snapshot_diagnostic_summary_rejects_caller_text() -> void:
@@ -663,7 +663,29 @@ func test_snapshot_diagnostic_summary_rejects_caller_text() -> void:
 	diagnostics[0].stage = "private-canary"
 	diagnostics[0].category = "private-canary"
 	var Lifecycle := load("res://addons/godot_ai/utils/server_lifecycle.gd")
-	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch_grant/unknown/unknown.")
+	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch/process_query.")
+
+
+func test_snapshot_failure_categories_are_fixed_and_ancestor_aware() -> void:
+	assert_eq(McpPortResolver.snapshot_failure_category("shell_exit"), "process_query")
+	assert_eq(McpPortResolver.snapshot_failure_category("snapshot_json"), "json_shape")
+	assert_eq(McpPortResolver.snapshot_failure_category("row_identity", 0), "json_shape")
+	assert_eq(McpPortResolver.snapshot_failure_category("row_identity", 1), "ancestor_capture")
+	assert_eq(McpPortResolver.snapshot_failure_category("lineage_cycle", 2), "ancestor_capture")
+	assert_eq(McpPortResolver.snapshot_failure_category("private-canary"), "process_query")
+
+
+func test_process_creation_identity_never_copies_the_command_line() -> void:
+	var rows := _snapshot_rows()
+	var snapshot := McpPortResolver.parse_process_snapshot(JSON.stringify(rows), 4242)
+	assert_eq(McpPortResolver.process_creation_identity(4242, snapshot), "09/09/2026 12:00:00")
+	assert_false(McpPortResolver.process_creation_identity(4242, snapshot).contains("--transport"))
+	rows[0].identity = "134019180000000000"
+	rows[0].commandline = ""
+	rows[0].parent_pid = 0
+	rows.resize(1)
+	snapshot = McpPortResolver.parse_process_snapshot(JSON.stringify(rows), 4242)
+	assert_eq(McpPortResolver.process_creation_identity(4242, snapshot), "134019180000000000")
 
 
 func test_snapshot_diagnostics_bound_distinct_ancestor_failures() -> void:

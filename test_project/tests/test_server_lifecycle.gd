@@ -863,8 +863,57 @@ func test_launch_unproven_message_summarises_the_refusals() -> void:
 	assert_true(message.contains("pid 2147480000"), message)
 	assert_true(message.contains("now alive=no"), message)
 	assert_true(message.contains("not_alive×2, unbranded×1"), message)
+	assert_false(message.contains("command:"), "raw command lines must not enter diagnostics")
 	var empty := manager._launch_unproven_message(2147480000, [], 0)
 	assert_true(empty.contains("none recorded"), empty)
+
+
+func test_snapshot_evidence_covers_each_capture_stage_and_fixed_category() -> void:
+	var rows := [
+		{"pid": 4242, "parent_pid": 0, "identity": "creation|private command", "commandline": "private command"},
+	]
+	var snapshot := McpPortResolver.parse_process_snapshot(JSON.stringify(rows), 4242)
+	for stage in Lifecycle.IDENTITY_CAPTURE_STAGES:
+		var success := Lifecycle._snapshot_evidence(stage, 4242, snapshot, [], 2, 17)
+		assert_eq(success.stage, stage)
+		assert_eq(success.category, "", "successful captures carry no failure category")
+		assert_eq(success.creation_identity, "creation")
+		assert_eq(success.attempt, 2)
+		assert_eq(success.elapsed_ms, 17)
+	var cases := [
+		["shell_exit", -1, "process_query"],
+		["snapshot_json", -1, "json_shape"],
+		["row_identity", 1, "ancestor_capture"],
+	]
+	for item in cases:
+		var diagnostics: Array = [{
+			"category": item[0], "stage": "single", "depth": item[1],
+			"elapsed_ms": 1, "count": 1,
+		}]
+		var failure := Lifecycle._snapshot_evidence("final_server", 4242, snapshot, diagnostics, 3, 19)
+		assert_eq(failure.stage, "final_server")
+		assert_eq(failure.category, item[2])
+		assert_false(JSON.stringify(failure).contains("private command"))
+	var mismatch := Lifecycle._snapshot_evidence(
+		"first_server", 4242, snapshot, [], 1, 0, "identity_mismatch"
+	)
+	assert_eq(mismatch.category, "identity_mismatch")
+
+
+func test_proof_timeout_message_names_stage_category_identity_and_attempt() -> void:
+	var manager := Lifecycle.new()
+	manager._episode["snapshot_diagnostic"] = {
+		"stage": "first_server", "category": "json_shape", "pid": 4242,
+		"creation_identity": "creation|private command", "attempt": 3, "elapsed_ms": 19,
+	}
+	var message := manager._snapshot_diagnostic_sentence()
+	assert_true(message.contains("stage=first_server"), message)
+	assert_true(message.contains("category=json_shape"), message)
+	assert_true(message.contains("pid=4242"), message)
+	assert_true(message.contains("creation_identity=creation"), message)
+	assert_true(message.contains("attempt=3"), message)
+	assert_true(message.contains("elapsed_ms=19"), message)
+	assert_false(message.contains("private command"), message)
 func test_pre_v4_version_is_read_only_from_a_godot_ai_3x_claim() -> void:
 	assert_eq(Lifecycle.pre_v4_version_from_status({"name": "godot-ai", "server_version": "3.2.4"}), "3.2.4")
 	assert_eq(Lifecycle.pre_v4_version_from_status({"name": "godot-ai", "server_version": "4.0.2"}), "")
