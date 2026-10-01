@@ -37,6 +37,8 @@ var _mutex := Mutex.new()
 ## (types 0/1) never count. Mutex-guarded: _log_error can fire from any thread.
 const _ERROR_TYPE_SCRIPT := 2
 const _MAX_RECENT_SCRIPT_ERRORS := 64
+const _MAX_PENDING := 4096
+const _PENDING_TRIM_THRESHOLD := _MAX_PENDING * 2
 var _script_error_seq: int = 0
 var _recent_script_errors: Array = []
 
@@ -93,6 +95,17 @@ func _append(level: String, text: String, details: Dictionary = {}) -> void:
 		_pending.append([level, text])
 	else:
 		_pending.append([level, text, details.duplicate(true)])
+	## Drop an old batch when a script floods the logger before the next frame.
+	## Trimming at 2x the cap amortizes the slice instead of doing it per line.
+	if _pending.size() >= _PENDING_TRIM_THRESHOLD:
+		_pending = _pending.slice(_pending.size() - _MAX_PENDING)
+	_mutex.unlock()
+
+
+## Drop queued lines that no active debugger can consume.
+func clear() -> void:
+	_mutex.lock()
+	_pending.clear()
 	_mutex.unlock()
 
 
