@@ -1166,7 +1166,12 @@ func _effect_prove(payload: Dictionary) -> Dictionary:
 	if not _server_status_compatibility(
 		version, str(payload.expected_version), ws_port, int(payload.expected_ws_port)
 	).get("compatible", false):
-		return {"ok": false, "reason": "incompatible", "message": "The launched server does not match this plugin."}
+		return {
+			"ok": false,
+			"reason": "incompatible",
+			"message": "The launched server does not match this plugin.",
+			"proof_stage_attempts": stage_attempts.duplicate(true),
+		}
 	var pid := PortResolver.read_pid_file(str(payload.get("pid_file", "")))
 	if pid <= 1:
 		return _proof_pending("pid_file", stage_attempts)
@@ -1234,6 +1239,7 @@ func _effect_prove(payload: Dictionary) -> Dictionary:
 			"ok": false,
 			"reason": "incompatible",
 			"message": "The launched server changed compatibility before authority was granted.",
+			"proof_stage_attempts": stage_attempts.duplicate(true),
 		}
 	return {
 		"ok": true,

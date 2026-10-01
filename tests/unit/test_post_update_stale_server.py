@@ -181,6 +181,7 @@ def test_owned_launch_mints_transport_only_from_the_final_compatible_probe() -> 
     assert '_proof_pending("listener_pid"' in prove
     assert '_identity_mismatch("final_capture_window"' in prove
     assert '_proof_pending("final_capture_window"' in prove
+    assert prove.count('"proof_stage_attempts": stage_attempts.duplicate(true)') == 4
 
 
 def test_lifecycle_has_one_episode_and_no_generic_host_edge() -> None:
