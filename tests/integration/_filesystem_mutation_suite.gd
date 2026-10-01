@@ -157,7 +157,7 @@ func test_mutation_cancel_before_commit_preserves_source() -> void:
 	var source := MUTATION_ROOT + ".txt"
 	_mutation_write(source, "source")
 	var result: Dictionary = await Mutation.new().run({"path": source, "new_path": MUTATION_ROOT + "_moved.txt"}, "move", func() -> bool: return false)
-	assert_is_error(result, "INVALID_PARAMS")
+	assert_is_error(result, "FILESYSTEM_DISCOVERY_FAILED")
 	assert_eq(result.error.data.outcome, "unchanged")
 	assert_eq(FileAccess.get_file_as_string(source), "source")
 	_mutation_cleanup()
@@ -370,7 +370,7 @@ func test_mutation_large_tree_yields_and_cancels_before_disk_effects() -> void:
 	var result: Dictionary = await Mutation.new().run({"path": source, "new_path": MUTATION_ROOT + "_moved.txt"}, "move", func() -> bool: return frames[0] == 0)
 	tree.process_frame.disconnect(tick)
 	assert_true(frames[0] > 0, "discovery must return control to a real process frame")
-	assert_is_error(result, "INVALID_PARAMS")
+	assert_is_error(result, "FILESYSTEM_DISCOVERY_FAILED")
 	assert_eq(result.error.data.outcome, "unchanged")
 	assert_eq(FileAccess.get_file_as_string(source), "keep")
 	assert_false(FileAccess.file_exists(MUTATION_ROOT + "_moved.txt"))
@@ -516,7 +516,7 @@ func test_mutation_binary_string_owner_is_not_cleared_by_dependencies() -> void:
 	var refused: Dictionary = await Mutation.new().run({"path": source, "new_path": destination}, "move")
 	assert_is_error(refused, "INVALID_PARAMS")
 	if refused.has("error"):
-		assert_contains(refused.error.message, "Binary dependency discovery is unsupported")
+		assert_contains(refused.error.message, "dependency path rewrites")
 		assert_eq(refused.error.data.outcome, "unchanged")
 	assert_true(FileAccess.file_exists(source), "unknown binary ownership must preserve source")
 	assert_false(FileAccess.file_exists(destination), "unknown binary ownership must not move")
@@ -524,6 +524,46 @@ func test_mutation_binary_string_owner_is_not_cleared_by_dependencies() -> void:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(path)
 	EditorInterface.get_resource_filesystem().update_file(owner)
+	_mutation_cleanup()
+
+
+func test_mutation_unrelated_binary_owner_does_not_block_move() -> void:
+	_mutation_cleanup()
+	var source := MUTATION_ROOT + ".txt"
+	var destination := MUTATION_ROOT + "_moved.txt"
+	var owner := MUTATION_ROOT + "_unrelated.res"
+	_mutation_write(source, "keep")
+	var resource := Resource.new()
+	resource.set_meta("fixture", "unrelated")
+	assert_eq(ResourceSaver.save(resource, owner), OK, "unrelated binary owner must save")
+	var result: Dictionary = await Mutation.new().run({"path": source, "new_path": destination}, "move")
+	assert_has_key(result, "data", str(result))
+	assert_eq(FileAccess.get_file_as_string(destination), "keep")
+	assert_false(FileAccess.file_exists(source))
+	for path in [owner, owner + ".uid"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+	_mutation_cleanup()
+
+
+func test_mutation_large_unrelated_binary_owner_does_not_block_move() -> void:
+	_mutation_cleanup()
+	var source := MUTATION_ROOT + ".txt"
+	var destination := MUTATION_ROOT + "_moved.txt"
+	var owner := MUTATION_ROOT + "_large_binary_owner.res"
+	_mutation_write(source, "keep")
+	var resource := Resource.new()
+	var blob := PackedByteArray()
+	blob.resize(Mutation.MAX_FILE_BYTES + 1)
+	resource.set_meta("blob", blob)
+	assert_eq(ResourceSaver.save(resource, owner), OK, "large unrelated binary owner must save")
+	var result: Dictionary = await Mutation.new().run({"path": source, "new_path": destination}, "move")
+	assert_has_key(result, "data", str(result))
+	assert_eq(FileAccess.get_file_as_string(destination), "keep")
+	assert_false(FileAccess.file_exists(source))
+	for path in [owner, owner + ".uid"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
 	_mutation_cleanup()
 
 
