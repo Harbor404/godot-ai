@@ -11,6 +11,7 @@ pytestmark = pytest.mark.editor
 
 
 def test_game_logger_queue_does_not_grow_without_debugger() -> None:
+    """A headless game process must not retain logs without a debugger."""
     godot = godot_bin_or_skip()
     env = os.environ.copy()
     env["GODOT_AI_ALLOW_HEADLESS"] = "1"
