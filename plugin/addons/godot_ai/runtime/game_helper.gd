@@ -1026,9 +1026,9 @@ func _handle_eval(data: Array) -> void:
 	var run_fn := "_mcp_run_%s" % token
 	var script_source := (
 		"extends Node\n"
-		+ "func execute():\n"
+		+ "func execute() -> Variant:\n"
 		+ "\treturn await %s()\n\n" % run_fn
-		+ "func %s():\n" % run_fn
+		+ "func %s() -> Variant:\n" % run_fn
 		+ _indent_eval_code(code)
 	)
 
