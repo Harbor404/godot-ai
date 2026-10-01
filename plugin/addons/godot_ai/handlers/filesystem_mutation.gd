@@ -138,8 +138,12 @@ func _run(params: Dictionary, operation: String) -> Dictionary:
 		if length < 0:
 			return _fault_result()
 		if length > MAX_FILE_BYTES:
-			# Large resources are checked through Godot's dependency graph. This
-			# keeps discovery bounded without rejecting every large binary owner.
+			# Dependency enumeration can replace a literal scan for packed binary
+			# owners, but not for scripts or text resources: those can refer to a
+			# target in ordinary strings the graph does not report. Fail closed.
+			if extension not in ["res", "scn"]:
+				_set_fault("Cannot safely read owner %s (exceeds %d bytes)" % [path, MAX_FILE_BYTES], Errors.FILESYSTEM_DISCOVERY_FAILED)
+				return _fault_result()
 			hits = await _large_owner_references(path, targets)
 		else:
 			var content: Variant = await _read_bounded(path)

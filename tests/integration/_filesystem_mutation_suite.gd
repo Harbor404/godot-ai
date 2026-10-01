@@ -567,6 +567,32 @@ func test_mutation_large_unrelated_binary_owner_does_not_block_move() -> void:
 	_mutation_cleanup()
 
 
+func test_mutation_large_text_owner_fails_closed() -> void:
+	_mutation_cleanup()
+	var source := MUTATION_ROOT + ".txt"
+	var destination := MUTATION_ROOT + "_moved.txt"
+	var owner := MUTATION_ROOT + "_large_text_owner.gd"
+	_mutation_write(source, "keep")
+	var file := FileAccess.open(owner, FileAccess.WRITE)
+	assert_true(file != null, "large text owner fixture must open")
+	if file != null:
+		file.store_string("@tool\nextends RefCounted\nconst Target = \"%s\"\n" % source)
+		for _index in 30000:
+			file.store_string("# padding for the oversized-owner branch\n")
+		file.close()
+	EditorInterface.get_resource_filesystem().update_file(owner)
+	var result: Dictionary = await Mutation.new().run({"path": source, "new_path": destination}, "move")
+	assert_is_error(result, "FILESYSTEM_DISCOVERY_FAILED")
+	assert_contains(result.error.message, "exceeds")
+	assert_true(FileAccess.file_exists(source), "oversized text owner must preserve source")
+	assert_false(FileAccess.file_exists(destination), "oversized text owner must not move")
+	for path in [owner, owner + ".uid"]:
+		if FileAccess.file_exists(path):
+			DirAccess.remove_absolute(path)
+	EditorInterface.get_resource_filesystem().update_file(owner)
+	_mutation_cleanup()
+
+
 func test_mutation_owner_scan_checks_cancellation_between_relative_hits() -> void:
 	var job := Mutation.new()
 	job._deadline = Time.get_ticks_msec() + 25000
