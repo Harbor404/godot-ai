@@ -914,6 +914,26 @@ func test_proof_timeout_message_names_stage_category_identity_and_attempt() -> v
 	assert_true(message.contains("attempt=3"), message)
 	assert_true(message.contains("elapsed_ms=19"), message)
 	assert_false(message.contains("private command"), message)
+
+
+func test_reused_ancestor_capture_is_retargeted_to_the_launcher() -> void:
+	var rows := [
+		{"pid": 4242, "parent_pid": 4241, "identity": "worker-creation|worker", "commandline": "worker"},
+		{"pid": 4241, "parent_pid": 0, "identity": "launcher-creation|launcher", "commandline": "launcher"},
+	]
+	var snapshot := McpPortResolver.parse_process_snapshot(JSON.stringify(rows), 4242)
+	var worker_capture := {
+		"snapshot": snapshot,
+		"diagnostic": {
+			"stage": "launch", "category": "", "pid": 4242,
+			"creation_identity": "worker-creation", "attempt": 4, "elapsed_ms": 23,
+		},
+	}
+	var launcher_capture := Lifecycle._retarget_snapshot_capture(worker_capture, "launch", 4241)
+	assert_eq(launcher_capture.diagnostic.pid, 4241)
+	assert_eq(launcher_capture.diagnostic.creation_identity, "launcher-creation")
+	assert_eq(launcher_capture.diagnostic.attempt, 4)
+	assert_eq(launcher_capture.diagnostic.elapsed_ms, 23)
 func test_pre_v4_version_is_read_only_from_a_godot_ai_3x_claim() -> void:
 	assert_eq(Lifecycle.pre_v4_version_from_status({"name": "godot-ai", "server_version": "3.2.4"}), "3.2.4")
 	assert_eq(Lifecycle.pre_v4_version_from_status({"name": "godot-ai", "server_version": "4.0.2"}), "")
