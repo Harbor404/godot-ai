@@ -463,10 +463,10 @@ func test_reparent_preserves_descendant_owner_on_undo() -> void:
 	chain.teardown.call()
 
 
-func test_reparent_restores_owned_and_unowned_descendants_on_undo_redo() -> void:
-	## Upstream PR #927 review: undo must restore a null owner unchanged rather
-	## than substituting scene_root. One subtree with both a scene-owned and an
-	## unowned child covers do / undo / redo.
+func test_reparent_preserves_owned_and_unowned_descendants_on_undo_redo() -> void:
+	## Issue #1118 requires a null owner to stay null through do, undo, and
+	## redo rather than being substituted with scene_root. One subtree with
+	## both a scene-owned and an unowned child covers all three paths.
 	var parent_res := _handler.create_node({
 		"type": "Node3D",
 		"name": "_McpTestMixParent",
@@ -513,7 +513,7 @@ func test_reparent_restores_owned_and_unowned_descendants_on_undo_redo() -> void
 	assert_has_key(result, "data")
 	assert_true(result.data.undoable, "reparent should be undoable")
 	assert_eq(owned.owner, scene_root, "owned child is scene-owned after reparent")
-	assert_eq(unowned.owner, scene_root, "unowned child is scene-owned after reparent")
+	assert_eq(unowned.owner, null, "unowned child stays unowned after reparent")
 
 	assert_true(editor_undo(_undo_redo), "undo reparent should succeed")
 	assert_eq(owned.owner, scene_root, "owned child owner restored to scene root on undo")
@@ -521,7 +521,7 @@ func test_reparent_restores_owned_and_unowned_descendants_on_undo_redo() -> void
 
 	assert_true(editor_redo(_undo_redo), "redo reparent should succeed")
 	assert_eq(owned.owner, scene_root, "owned child is scene-owned after redo")
-	assert_eq(unowned.owner, scene_root, "unowned child is scene-owned after redo")
+	assert_eq(unowned.owner, null, "unowned child stays unowned after redo")
 
 	assert_true(editor_undo(_undo_redo), "undo reparent after redo should succeed")
 	assert_eq(owned.owner, scene_root, "owned child owner restored after second undo")

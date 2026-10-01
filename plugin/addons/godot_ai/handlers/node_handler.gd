@@ -160,19 +160,15 @@ func reparent_node(params: Dictionary) -> Dictionary:
 	_undo_redo.add_do_method(new_parent, "add_child", node, true)
 	_undo_redo.add_do_method(node, "set_owner", scene_root)
 	for child in descendants:
-		## Only descendants whose owner sits OUTSIDE the moved subtree get
-		## re-normalized to scene_root. `remove_child` clears exactly those
-		## owners (scene_root sits outside the pruned subtree) and the #904
-		## null-owner normalization still applies to them.
+		## Preserve intentional null owners and owners that live inside the
+		## moved subtree. `remove_child` clears owners outside the subtree, so
+		## only those need to be re-normalized to scene_root. The subtree is
+		## still intact here because the recorded do-methods have not run yet.
 		##
-		## A descendant owned by a node INSIDE the subtree — a node owned by
-		## an instanced sub-scene's root — must keep that owner. Re-owning it
-		## with scene_root made the instance's internals scene-owned, so
-		## saving wrote them into the parent `.tscn` as local nodes and the
-		## instance's overrides were lost (#1118). The subtree is still intact
-		## here because the recorded do-methods have not run yet.
+		## Re-owning an instance's internal nodes with scene_root flattened the
+		## sub-scene on save and dropped its overrides (#1118).
 		var prior_owner: Node = child.owner
-		if prior_owner != null and (prior_owner == node or node.is_ancestor_of(prior_owner)):
+		if prior_owner == null or prior_owner == node or node.is_ancestor_of(prior_owner):
 			continue
 		_undo_redo.add_do_method(child, "set_owner", scene_root)
 	_undo_redo.add_do_reference(node)
