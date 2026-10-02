@@ -1221,12 +1221,18 @@ func _handle_eval_check(data: Array) -> void:
 	_try_report_eval_runtime_error(request_id)
 
 
+## `execute()` always returns, so it carries a return type. The inner function
+## holds caller code that need not return on every path; a declared return type
+## there makes Godot reject it with "Not all code paths return a value". It
+## stays untyped and suppresses `untyped_declaration` on its own declaration
+## instead (#1119). The annotation shares the `func` line so the line numbers
+## reported for caller code do not move.
 static func _build_eval_script_source(run_fn: String, code: String) -> String:
 	return (
 		"extends Node\n"
 		+ "func execute() -> Variant:\n"
 		+ "\treturn await %s()\n\n" % run_fn
-		+ "func %s() -> Variant:\n" % run_fn
+		+ "@warning_ignore(\"untyped_declaration\") func %s():\n" % run_fn
 		+ _indent_eval_code(code)
 	)
 
