@@ -539,7 +539,8 @@ static func _snapshot_failure(
 
 ## Map one internal collector refusal to the bounded category retained in the
 ## editor log. `row_identity` at depth zero is malformed target metadata;
-## the same refusal on an ancestor is an ancestor-capture failure.
+## the same refusal on an ancestor is an ancestor-capture failure. A refusal
+## this table does not know stays "unknown" instead of borrowing a category.
 static func snapshot_failure_category(detail: String, depth := -1) -> String:
 	match detail:
 		"shell_exit", "empty_output", "invalid_pid", "collector_null":
@@ -551,7 +552,7 @@ static func snapshot_failure_category(detail: String, depth := -1) -> String:
 		"outer_size", "outer_json", "outer_shape", "snapshot_size", "snapshot_json", \
 		"snapshot_shape", "row_shape", "row_pid", "row_chain":
 			return "json_shape"
-	return "process_query"
+	return "unknown"
 
 
 ## Return only the creation-time portion of a captured identity. Windows rows

@@ -877,6 +877,7 @@ func test_snapshot_evidence_covers_each_capture_stage_and_fixed_category() -> vo
 		var success := Lifecycle._snapshot_evidence(stage, 4242, snapshot, [], 2, 17)
 		assert_eq(success.stage, stage)
 		assert_eq(success.category, "", "successful captures carry no failure category")
+		assert_eq(success.detail, "", "successful captures carry no collector detail")
 		assert_eq(success.creation_identity, "creation")
 		assert_eq(success.attempt, 2)
 		assert_eq(success.elapsed_ms, 17)
@@ -893,7 +894,17 @@ func test_snapshot_evidence_covers_each_capture_stage_and_fixed_category() -> vo
 		var failure := Lifecycle._snapshot_evidence("final_server", 4242, snapshot, diagnostics, 3, 19)
 		assert_eq(failure.stage, "final_server")
 		assert_eq(failure.category, item[2])
+		assert_eq(failure.detail, item[0], "the collector's own refusal is retained")
+		assert_eq(failure.depth, item[1])
 		assert_false(JSON.stringify(failure).contains("private command"))
+	var unknown := Lifecycle._snapshot_evidence(
+		"launch", 4242, {"capture_error": true},
+		[{"category": "private-canary", "stage": "single", "depth": -1, "elapsed_ms": 1, "count": 1}],
+		1, 0,
+	)
+	assert_eq(unknown.category, "unknown", "an unrecognized refusal is not given a known category")
+	assert_eq(unknown.detail, "unknown")
+	assert_false(JSON.stringify(unknown).contains("private-canary"))
 	var mismatch := Lifecycle._snapshot_evidence(
 		"first_server", 4242, snapshot, [], 1, 0, "identity_mismatch"
 	)
@@ -914,6 +925,16 @@ func test_proof_timeout_message_names_stage_category_identity_and_attempt() -> v
 	assert_true(message.contains("attempt=3"), message)
 	assert_true(message.contains("elapsed_ms=19"), message)
 	assert_false(message.contains("private command"), message)
+	assert_false(message.contains("detail="), "no collector detail was recorded")
+	manager._episode["snapshot_diagnostic"]["category"] = "ancestor_capture"
+	manager._episode["snapshot_diagnostic"]["detail"] = "row_identity"
+	manager._episode["snapshot_diagnostic"]["depth"] = 2
+	message = manager._snapshot_diagnostic_sentence()
+	assert_true(message.contains("category=ancestor_capture detail=row_identity depth=2"), message)
+	manager._episode["snapshot_diagnostic"]["detail"] = "private-canary"
+	message = manager._snapshot_diagnostic_sentence()
+	assert_true(message.contains("detail=unknown"), message)
+	assert_false(message.contains("private-canary"), message)
 
 
 func test_reused_ancestor_capture_is_retargeted_to_the_launcher() -> void:

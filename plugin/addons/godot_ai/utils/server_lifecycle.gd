@@ -889,11 +889,15 @@ func _effect_launch(payload: Dictionary) -> Dictionary:
 static func _snapshot_diagnostic_summary(diagnostics: Array) -> String:
 	var labels: Array[String] = []
 	for item in diagnostics.slice(0, 8):
-		var detail: String = item.category if item.category in PortResolver.SNAPSHOT_DIAGNOSTIC_CATEGORIES else "unknown"
-		var category := PortResolver.snapshot_failure_category(detail, int(item.depth))
-		var label := "launch/%s" % category
+		var stage: String = item.stage if item.stage in PortResolver.SNAPSHOT_DIAGNOSTIC_STAGES else "unknown"
+		var category: String = item.category if item.category in PortResolver.SNAPSHOT_DIAGNOSTIC_CATEGORIES else "unknown"
+		var label := "launch_grant/%s/%s" % [stage, category]
+		if int(item.depth) >= 0:
+			label += " at depth %d" % clampi(int(item.depth), 0, 16)
 		if int(item.count) > 1:
 			label += " x%d" % clampi(int(item.count), 1, 10000)
+		if int(item.elapsed_ms) >= 0:
+			label += " (first query %d ms)" % clampi(int(item.elapsed_ms), 0, 600000)
 		if not labels.has(label):
 			labels.append(label)
 	return "" if labels.is_empty() else " Snapshot diagnostics: " + "; ".join(labels) + "."
@@ -963,6 +967,16 @@ func _snapshot_diagnostic_sentence() -> String:
 	if identity.is_empty():
 		identity = "unavailable"
 	identity = identity.get_slice("|", 0).replace("\n", " ").replace("\r", " ").substr(0, 128)
+	## The collector's own refusal, when one was recorded: the fixed category
+	## alone cannot tell a shell that exited from one that printed nothing.
+	var detail := str(diagnostic.get("detail", ""))
+	if not detail.is_empty():
+		if detail not in PortResolver.SNAPSHOT_DIAGNOSTIC_CATEGORIES:
+			detail = "unknown"
+		category += " detail=%s" % detail
+		var depth := int(diagnostic.get("depth", -1))
+		if depth >= 0:
+			category += " depth=%d" % clampi(depth, 0, 16)
 	return (
 		" Identity capture: stage=%s category=%s pid=%d creation_identity=%s attempt=%d elapsed_ms=%d."
 	) % [
@@ -1049,6 +1063,12 @@ static func _snapshot_evidence(
 			if category.is_empty() or category in PortResolver.SNAPSHOT_FAILURE_CATEGORIES
 			else "unknown"
 		),
+		"detail": (
+			detail
+			if detail.is_empty() or detail in PortResolver.SNAPSHOT_DIAGNOSTIC_CATEGORIES
+			else "unknown"
+		),
+		"depth": clampi(depth, -1, 16),
 		"pid": pid,
 		"creation_identity": "unavailable" if creation_identity.is_empty() else creation_identity,
 		"attempt": clampi(attempt, 1, 100000),

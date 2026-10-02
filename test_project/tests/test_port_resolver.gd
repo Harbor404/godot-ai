@@ -652,7 +652,7 @@ func test_snapshot_diagnostics_aggregate_without_changing_refusals() -> void:
 	assert_eq(reasons, ["invalid_pid"])
 	assert_eq(diagnostics[0].count, 20)
 	var Lifecycle := load("res://addons/godot_ai/utils/server_lifecycle.gd")
-	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch/process_query x20.")
+	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch_grant/single/collector_null x20.")
 
 
 func test_snapshot_diagnostic_summary_rejects_caller_text() -> void:
@@ -663,7 +663,7 @@ func test_snapshot_diagnostic_summary_rejects_caller_text() -> void:
 	diagnostics[0].stage = "private-canary"
 	diagnostics[0].category = "private-canary"
 	var Lifecycle := load("res://addons/godot_ai/utils/server_lifecycle.gd")
-	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch/process_query.")
+	assert_eq(Lifecycle._snapshot_diagnostic_summary(diagnostics), " Snapshot diagnostics: launch_grant/unknown/unknown.")
 
 
 func test_snapshot_failure_categories_are_fixed_and_ancestor_aware() -> void:
@@ -672,7 +672,7 @@ func test_snapshot_failure_categories_are_fixed_and_ancestor_aware() -> void:
 	assert_eq(McpPortResolver.snapshot_failure_category("row_identity", 0), "json_shape")
 	assert_eq(McpPortResolver.snapshot_failure_category("row_identity", 1), "ancestor_capture")
 	assert_eq(McpPortResolver.snapshot_failure_category("lineage_cycle", 2), "ancestor_capture")
-	assert_eq(McpPortResolver.snapshot_failure_category("private-canary"), "process_query")
+	assert_eq(McpPortResolver.snapshot_failure_category("private-canary"), "unknown")
 
 
 func test_process_creation_identity_never_copies_the_command_line() -> void:

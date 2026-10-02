@@ -98,10 +98,16 @@ func run() -> void:
 		require(reason == case.expected, label + " expected " + str(case.expected) + " got " + reason)
 		if not manager.failure_calls.is_empty():
 			require(manager.injected, label + " reaches intended capture failure")
+		if label == "launch_capture_failure":
+			manager.failure_calls.assign([manager.capture_calls + 1])
+			var unproven := manager._launch_unproven_message(launch_pid, ["identity_unavailable"], 1)
+			require("alive=unknown" in unproven and "identity_unavailable" in unproven, label + " diagnostic does not claim death")
+			require("launch_grant/single/shell_exit" in unproven, label + " diagnostic names the collector refusal")
 		if case.has("stage"):
 			var diagnostic: Dictionary = result.get("snapshot_diagnostic", {})
 			require(str(diagnostic.get("stage", "")) == str(case.stage), label + " reports capture stage")
 			require(str(diagnostic.get("category", "")) == str(case.category), label + " reports fixed failure category")
+			require(str(diagnostic.get("detail", "")) == str(case.get("detail", "")), label + " retains the collector refusal")
 			require(int(diagnostic.get("pid", -1)) > 1, label + " retains PID")
 			require(not str(diagnostic.get("creation_identity", "")).is_empty(), label + " retains creation identity evidence")
 			require(int(diagnostic.get("attempt", 0)) >= 1, label + " retains attempt")
