@@ -10,6 +10,8 @@ const MAX_ENTRIES := 10000
 const MAX_FILE_BYTES := 256 * 1024
 const MAX_TOTAL_BYTES := 64 * 1024 * 1024
 const MAX_TARGETS := 256
+## Container magic Godot writes for a compressed binary resource.
+const COMPRESSED_MAGIC := "RSCC"
 const BUDGET_USEC := 2000
 const DEADLINE_MSEC := 25000
 static var _busy := false
@@ -316,12 +318,18 @@ func _owner_dependencies(path: String) -> PackedStringArray:
 	return dependencies
 
 
-func _large_owner_references(path: String, targets: Dictionary) -> Array[Dictionary]:
-	var dependencies := _owner_dependencies(path)
-	var dependency_paths: Dictionary = {}
+## Lowercased `uid://` and path segments of the engine's dependency records.
+func _dependency_segments(dependencies: PackedStringArray) -> Dictionary:
+	var segments: Dictionary = {}
 	for dependency in dependencies:
 		for segment in dependency.split("::", false):
-			dependency_paths[segment.to_lower()] = true
+			segments[segment.to_lower()] = true
+	return segments
+
+
+func _large_owner_references(path: String, targets: Dictionary) -> Array[Dictionary]:
+	var dependencies := _owner_dependencies(path)
+	var dependency_paths := _dependency_segments(dependencies)
 	_large_owners[path] = {
 		"modified": FileAccess.get_modified_time(path),
 		"size": _file_length(path),
@@ -345,14 +353,24 @@ func _large_owner_references(path: String, targets: Dictionary) -> Array[Diction
 
 func _binary_references(path: String, bytes: PackedByteArray, targets: Dictionary) -> Array[Dictionary]:
 	var hits: Array[Dictionary] = []
+	var payload: Variant = _binary_scan_bytes(path, bytes)
+	if payload == null:
+		return hits
+	# The binary format stores an ext_resource UID as an integer, which no text
+	# scan can see, so the engine's dependency records are consulted as well.
+	var dependency_paths := _dependency_segments(_owner_dependencies(path))
 	for target: String in targets:
 		# Keep cancellation and frame progress even when a path match continues.
 		if not await _yield_if_needed():
 			return hits
 		var uid: int = targets[target].uid
 		var uid_text := ResourceUID.id_to_text(uid) if uid != ResourceUID.INVALID_ID else ""
-		var uses_path := _bytes_contains_ci(bytes, target.to_utf8_buffer())
-		var uses_uid := not uid_text.is_empty() and _bytes_contains_ci(bytes, uid_text.to_utf8_buffer())
+		var uses_path: bool = (
+			_bytes_contains_ci(payload, target.to_utf8_buffer())
+			or dependency_paths.has(target.to_lower())
+			or (not uid_text.is_empty() and dependency_paths.has(uid_text.to_lower()))
+		)
+		var uses_uid: bool = not uid_text.is_empty() and _bytes_contains_ci(payload, uid_text.to_utf8_buffer())
 		if uses_path:
 			hits.append({"path": target, "kind": "path"})
 		elif uses_uid:
@@ -361,6 +379,56 @@ func _binary_references(path: String, bytes: PackedByteArray, targets: Dictionar
 				return hits
 			hits.append({"path": target, "kind": "uid"})
 	return hits
+
+
+## The bytes a literal scan can inspect. The editor saves binary resources
+## compressed by default (`filesystem/on_save/compress_binary_resources`), and
+## a compressed container shows none of its serialized paths, so expand it
+## first. Layout: magic, mode, block size and expanded size (u32 each), one
+## u32 compressed size per block, then the blocks.
+##
+## Returns an empty array when the expanded payload exceeds the per-file limit
+## (the caller then relies on dependency records alone, like any oversized
+## binary owner) and null, with a fault, for a container that cannot be read.
+func _binary_scan_bytes(path: String, bytes: PackedByteArray) -> Variant:
+	if bytes.size() < 4 or bytes.slice(0, 4).get_string_from_ascii() != COMPRESSED_MAGIC:
+		return bytes
+	var unreadable := "Cannot inspect compressed binary owner: %s" % path
+	if bytes.size() < 16:
+		_set_fault(unreadable, Errors.FILESYSTEM_DISCOVERY_FAILED)
+		return null
+	var mode := bytes.decode_u32(4)
+	var block_size := bytes.decode_u32(8)
+	var total := bytes.decode_u32(12)
+	if mode > FileAccess.COMPRESSION_BROTLI or block_size == 0:
+		_set_fault(unreadable, Errors.FILESYSTEM_DISCOVERY_FAILED)
+		return null
+	if total > MAX_FILE_BYTES:
+		return PackedByteArray()
+	var block_count := total / block_size + 1
+	var offset := 16 + block_count * 4
+	if offset > bytes.size():
+		_set_fault(unreadable, Errors.FILESYSTEM_DISCOVERY_FAILED)
+		return null
+	var payload := PackedByteArray()
+	for index in block_count:
+		var compressed_size := bytes.decode_u32(16 + index * 4)
+		var expected := total % block_size if index == block_count - 1 else block_size
+		if offset + compressed_size > bytes.size():
+			_set_fault(unreadable, Errors.FILESYSTEM_DISCOVERY_FAILED)
+			return null
+		if expected > 0:
+			var block := bytes.slice(offset, offset + compressed_size).decompress(expected, mode)
+			if block.size() != expected:
+				_set_fault(unreadable, Errors.FILESYSTEM_DISCOVERY_FAILED)
+				return null
+			payload.append_array(block)
+		offset += compressed_size
+	_bytes += payload.size()
+	if _bytes > MAX_TOTAL_BYTES:
+		_set_fault("Filesystem discovery exceeds its byte budget; nothing changed", Errors.FILESYSTEM_DISCOVERY_FAILED)
+		return null
+	return payload
 
 
 func _ascii_lower(value: int) -> int:

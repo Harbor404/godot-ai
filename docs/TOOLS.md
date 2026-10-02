@@ -289,11 +289,12 @@ preserve verified UID references; they refuse literal-path dependencies,
 project-setting references, affected open scene tabs and missing destination
 parents. Automatic dependency rewriting is not supported. Discovery includes
 literal relative, `res://` and `uid://` references in `.gd`, `.cs`, `.gdshader`,
-`.gdshaderinc`, `.tscn` and `.tres` owners. Bounded binary `.res`/`.scn` owners
-are scanned for exact serialized path/UID bytes; larger owners are checked
-through Godot's resource dependency graph instead of being rejected wholesale.
-Serialized strings in oversized binary owners that are not engine dependencies
-remain outside static discovery, like computed runtime paths. Unreadable
+`.gdshaderinc`, `.tscn` and `.tres` owners. Binary `.res`/`.scn` owners are
+checked through Godot's resource dependency records, and those whose payload
+is at most 256 KiB, after expanding a compressed container, are also scanned
+for exact serialized path/UID bytes. Serialized strings in larger binary
+owners that are not engine dependencies remain outside static discovery, like
+computed runtime paths. Unreadable
 metadata, discovery deadline/cancellation and discovery budgets return
 `FILESYSTEM_DISCOVERY_FAILED`; semantic refusals remain `INVALID_PARAMS`.
 Linked paths are refused, including when `force=true`. Engine metadata, VCS
